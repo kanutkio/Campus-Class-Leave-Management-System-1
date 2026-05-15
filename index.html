@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>校園請假管理系統</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #27ae60;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #333;
+            --text-muted: #777;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+        }
+
+        /* 表單樣式 */
+        .form-section {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        button.btn-submit {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        button.btn-submit:hover {
+            background-color: #357abd;
+        }
+
+        /* 篩選器樣式 */
+        .filter-section {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--primary-color);
+            background: white;
+            color: var(--primary-color);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* 卡片列表樣 style */
+        .record-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 6px solid var(--primary-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            transition: transform 0.2s;
+        }
+
+        .card.status-done {
+            border-left-color: var(--success-color);
+            background-color: #f9f9f9;
+            opacity: 0.8;
+        }
+
+        .card-content h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+
+        .card-info {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .badge-active { background: #e3f2fd; color: #1976d2; }
+        .badge-done { background: #e8f5e9; color: #2e7d32; }
+
+        .card-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn-toggle {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-toggle:hover {
+            background: #eee;
+        }
+
+        .empty-msg {
+            text-align: center;
+            color: var(--text-muted);
+            margin-top: 50px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>校園請假管理系統</h1>
+
+    <section class="form-section">
+        <form id="leaveForm">
+            <div class="form-group">
+                <label for="studentId">學號 *</label>
+                <input type="text" id="studentId" placeholder="例如: B11001001" required>
+            </div>
+            <div class="form-group">
+                <label for="studentName">學生姓名 *</label>
+                <input type="text" id="studentName" placeholder="例如: 王小明" required>
+            </div>
+            <div class="form-group">
+                <label for="leaveReason">請假原因</label>
+                <textarea id="leaveReason" rows="2" placeholder="請輸入請假事由..."></textarea>
+            </div>
+            <button type="submit" class="btn-submit">送出申請</button>
+        </form>
+    </section>
+
+    <section class="filter-section">
+        <button class="filter-btn active" onclick="handleFilter('all', this)">全部</button>
+        <button class="filter-btn" onclick="handleFilter('active', this)">審核中 (Active)</button>
+        <button class="filter-btn" onclick="handleFilter('done', this)">已完成 (Done)</button>
+    </section>
+
+    <div id="recordList" class="record-list">
+        </div>
+</div>
+
+<script>
+    // --- 全域變數 ---
+    const STORAGE_KEY = 'records';
+    let currentFilter = 'all';
+
+    // --- 初始化 ---
+    window.onload = () => {
+        initApp();
+    };
+
+    function initApp() {
+        const records = loadData();
+        renderList(records);
+
+        // 表單監聽
+        document.getElementById('leaveForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                studentId: document.getElementById('studentId').value,
+                studentName: document.getElementById('studentName').value,
+                leaveReason: document.getElementById('leaveReason').value
+            };
+
+            const newRecord = createRecord(formData);
+            saveData(newRecord);
+            
+            // 重置表單並重新渲染
+            this.reset();
+            applyFilterAndRender();
+        });
+    }
+
+    // --- 要求的功能函式 ---
+
+    /**
+     * 1. 根據表單內容建立一筆新 record object
+     */
+    function createRecord(formData) {
+        return {
+            id: Date.now().toString(),
+            createdAt: new Date().toISOString(),
+            status: 'active',
+            studentId: formData.studentId,
+            studentName: formData.studentName,
+            leaveReason: formData.leaveReason || '無'
+        };
+    }
+
+    /**
+     * 2. 只負責新增一筆 record 到 records array，然後寫入 localStorage
+     */
+    function saveData(record) {
+        const records = loadData();
+        records.push(record);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    }
+
+    /**
+     * 3. 從 localStorage 讀取 records array；沒有資料就回傳 []
+     */
+    function loadData() {
+        const rawData = localStorage.getItem(STORAGE_KEY);
+        return rawData ? JSON.parse(rawData) : [];
+    }
+
+    /**
+     * 4. 把 records 顯示到頁面
+     */
+    function renderList(recordsToShow) {
+        const container = document.getElementById('recordList');
+        container.innerHTML = '';
+
+        if (recordsToShow.length === 0) {
+            container.innerHTML = '<p class="empty-msg">目前無請假紀錄</p>';
+            return;
+        }
+
+        recordsToShow.forEach(record => {
+            const isDone = record.status === 'done';
+            const dateStr = new Date(record.createdAt).toLocaleString();
+            
+            const card = document.createElement('div');
+            card.className = `card ${isDone ? 'status-done' : ''}`;
+            
+            card.innerHTML = `
+                <div class="card-content">
+                    <h3>${record.studentName} (${record.studentId})</h3>
+                    <div class="card-info">
+                        <div><strong>原因：</strong>${record.leaveReason}</div>
+                        <div><strong>申請時間：</strong>${dateStr}</div>
+                        <span class="status-badge ${isDone ? 'badge-done' : 'badge-active'}">
+                            ${isDone ? '已完成審核' : '審核中'}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-actions">
+                    <button class="btn-toggle" onclick="toggleStatus('${record.id}')">
+                        切換為 ${isDone ? '審核中' : '完成審核'}
+                    </button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    /**
+     * 5. 只負責更新一筆 record，然後寫入 localStorage
+     */
+    function updateRecord(id, changes) {
+        const records = loadData();
+        const index = records.findIndex(r => r.id === id);
+        if (index !== -1) {
+            // 合併變更
+            records[index] = { ...records[index], ...changes };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+        }
+    }
+
+    // --- 輔助 UI 邏輯 ---
+
+    function toggleStatus(id) {
+        const records = loadData();
+        const target = records.find(r => r.id === id);
+        if (target) {
+            const newStatus = target.status === 'active' ? 'done' : 'active';
+            updateRecord(id, { status: newStatus });
+            applyFilterAndRender();
+        }
+    }
+
+    function handleFilter(filterType, btnElement) {
+        // 更新按鈕樣式
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        btnElement.classList.add('active');
+        
+        currentFilter = filterType;
+        applyFilterAndRender();
+    }
+
+    function applyFilterAndRender() {
+        let records = loadData();
+        
+        // 根據目前 filter 狀態過濾（並按時間倒序，讓新的在上面）
+        records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        if (currentFilter !== 'all') {
+            records = records.filter(r => r.status === currentFilter);
+        }
+        
+        renderList(records);
+    }
+
+</script>
+
+</body>
+</html>
