@@ -214,17 +214,68 @@
     const STORAGE_KEY = 'records';
     let currentFilter = 'all';
 
+    // --- Google Sheet Backend Config ---
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxJwb-UHcXg6IiEBeAqaBtlhZ6li3wohs55yXBAg5GD8JRw8k98ltfBkNWI53RjM4zn/exec";
+
+    // --- Sheet 同步函式 ---
+    async function syncToSheet(payload) {
+        try {
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: JSON.stringify(payload)
+            });
+            return await response.json();
+        } catch (err) {
+            console.warn("同步到 Google Sheet 失敗（使用離線模式）", err);
+            return { ok: false, error: "網路異常" };
+        }
+    }
+
+    async function fetchRecordsFromSheet() {
+        try {
+            const response = await fetch(APPS_SCRIPT_URL);
+            const data = await response.json();
+            if (data.ok && Array.isArray(data.records)) {
+                return data.records.map(record => normalizeRecord(record));
+            }
+            return [];
+        } catch (err) {
+            console.warn("從 Google Sheet 讀取失敗", err);
+            return null;
+        }
+    }
+
+    function normalizeRecord(record) {
+        return {
+            id: record.ID || record.id || "",
+            createdAt: record.CreatedAt || record.createdAt || "",
+            status: record.Status || record.status || "active",
+            studentId: record.StudentId || record.studentId || "",
+            studentName: record.StudentName || record.studentName || "",
+            leaveReason: record.LeaveReason || record.leaveReason || "無"
+        };
+    }
+
     // --- 初始化 ---
-    window.onload = () => {
-        initApp();
+    window.onload = async () => {
+        await initApp();
     };
 
-    function initApp() {
-        const records = loadData();
+    async function initApp() {
+        // 優先讀 Google Sheet，失敗 fallback localStorage
+        let records = await fetchRecordsFromSheet();
+        if (!records) {
+            records = loadData();
+        } else {
+            // 同步到本地 localStorage 做離線備份
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+        }
+        
         renderList(records);
 
         // 表單監聽
-        document.getElementById('leaveForm').addEventListener('submit', function(e) {
+        document.getElementById('leaveForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const formData = {
@@ -235,6 +286,9 @@
 
             const newRecord = createRecord(formData);
             saveData(newRecord);
+            
+            // 同步到 Google Sheet
+            await syncToSheet({ action: "create", record: newRecord });
             
             // 重置表單並重新渲染
             this.reset();
@@ -318,24 +372,27 @@
     /**
      * 5. 只負責更新一筆 record，然後寫入 localStorage
      */
-    function updateRecord(id, changes) {
+    async function updateRecord(id, changes) {
         const records = loadData();
         const index = records.findIndex(r => r.id === id);
         if (index !== -1) {
             // 合併變更
             records[index] = { ...records[index], ...changes };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+            
+            // 同步到 Google Sheet
+            await syncToSheet({ action: "update", id, changes });
         }
     }
 
     // --- 輔助 UI 邏輯 ---
 
-    function toggleStatus(id) {
+    async function toggleStatus(id) {
         const records = loadData();
         const target = records.find(r => r.id === id);
         if (target) {
             const newStatus = target.status === 'active' ? 'done' : 'active';
-            updateRecord(id, { status: newStatus });
+            await updateRecord(id, { status: newStatus });
             applyFilterAndRender();
         }
     }
